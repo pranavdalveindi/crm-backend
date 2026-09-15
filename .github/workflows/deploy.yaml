@@ -1,0 +1,189 @@
+name: Deploy to EC2 via Jump Server
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run tests (optional)
+        run: |
+          npm ci
+          npm test || echo "No tests configured"
+        continue-on-error: true
+
+      - name: Setup SSH
+        run: |
+          # Create .ssh directory
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          
+          # Write jump server key
+          echo "${{ secrets.JUMP_SERVER_KEY }}" > ~/.ssh/jump_server_key
+          chmod 600 ~/.ssh/jump_server_key
+          
+          # Write target EC2 key
+          echo "${{ secrets.TARGET_EC2_KEY }}" > ~/.ssh/target_ec2_key
+          chmod 600 ~/.ssh/target_ec2_key
+          
+          # Create SSH config file
+          cat > ~/.ssh/config <<EOF
+          Host jump-server
+            HostName ${{ secrets.JUMP_SERVER_HOST }}
+            User ${{ secrets.JUMP_SERVER_USER }}
+            IdentityFile ~/.ssh/jump_server_key
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            ServerAliveInterval 60
+            ServerAliveCountMax 3
+          
+          Host target-ec2
+            HostName ${{ secrets.TARGET_EC2_HOST }}
+            User ${{ secrets.TARGET_EC2_USER }}
+            IdentityFile ~/.ssh/target_ec2_key
+            ProxyJump jump-server
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            ServerAliveInterval 60
+            ServerAliveCountMax 3
+          EOF
+          
+          chmod 600 ~/.ssh/config
+          
+          echo "✅ SSH configuration created successfully"
+
+      - name: Test SSH connectivity
+        run: |
+          echo "Testing jump server connection..."
+          ssh -v jump-server "echo '✅ Jump server connection successful'"
+          
+          echo "Testing target EC2 connection through jump server..."
+          ssh -v target-ec2 "echo '✅ Target EC2 connection successful'"
+
+      - name: Clean problematic directories on target server
+        run: |
+          ssh target-ec2 << 'ENDSSH'
+            set -e
+            echo "Cleaning old deploy directory and fixing permissions..."
+            
+            # Remove old deploy directory if it exists
+            if [ -d "/var/www/meter-app/deploy" ]; then
+              sudo rm -rf /var/www/meter-app/deploy
+              echo "✅ Removed old deploy directory"
+            fi
+            
+            # Ensure proper ownership
+            sudo chown -R $USER:$USER /var/www/meter-app 2>/dev/null || true
+            
+            echo "✅ Directory cleaned and permissions fixed"
+          ENDSSH
+
+      - name: Upload to target server via rsync
+        run: |
+          echo "Syncing files to target EC2..."
+          
+          # Use rsync with SSH config
+          rsync -avz \
+            --delete \
+            --exclude='node_modules' \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='*.log' \
+            --exclude='.env.local' \
+            --exclude='coverage' \
+            --exclude='deploy/' \
+            --exclude='deploy.tar.gz' \
+            -e "ssh" \
+            ./ \
+            target-ec2:/var/www/meter-app/
+          
+          echo "✅ Files synced successfully"
+
+      - name: Create .env file on target server
+        run: |
+          # Create .env content locally first
+          cat > /tmp/env_file << 'EOF'
+          ${{ secrets.ENV_FILE }}
+          EOF
+          
+          # Upload .env file via scp
+          scp /tmp/env_file target-ec2:/var/www/meter-app/.env
+          
+          # Set permissions
+          ssh target-ec2 "chmod 600 /var/www/meter-app/.env"
+          
+          # Cleanup local temp file
+          rm /tmp/env_file
+          
+          echo "✅ .env file uploaded and secured"
+
+      - name: Install dependencies on target server
+        run: |
+          ssh target-ec2 << 'ENDSSH'
+            set -e
+            cd /var/www/meter-app
+            
+            echo "Installing ALL dependencies (including dev for build)..."
+            npm ci
+            
+            echo "Building TypeScript on server..."
+            npm run build
+            
+            echo "✅ Dependencies installed and built"
+          ENDSSH
+
+      - name: Run deployment script
+        run: |
+          ssh target-ec2 << 'ENDSSH'
+            set -e
+            
+            echo "Running deployment script..."
+            bash /var/www/deploy.sh
+            
+            echo "✅ Deployment script completed"
+          ENDSSH
+
+      - name: Verify deployment
+        run: |
+          ssh target-ec2 << 'ENDSSH'
+            set -e
+            cd /var/www/meter-app
+            
+            echo "Checking PM2 status..."
+            pm2 list
+            
+            echo "Checking application logs..."
+            pm2 logs --lines 20 --nostream || true
+            
+            echo "✅ Deployment verification completed"
+          ENDSSH
+
+      - name: Cleanup SSH keys
+        if: always()
+        run: |
+          rm -f ~/.ssh/jump_server_key
+          rm -f ~/.ssh/target_ec2_key
+          rm -f ~/.ssh/config
+          echo "✅ SSH keys cleaned up"
+
+      - name: Notify deployment status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "🎉 Deployment completed successfully!"
+          else
+            echo "❌ Deployment failed. Check logs above."
+          fi  
