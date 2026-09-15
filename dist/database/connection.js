@@ -42,6 +42,7 @@ const env_1 = require("../config/env");
 const tunnel_1 = require("./tunnel");
 const dbHost = env_1.env.ssh.enabled ? (0, tunnel_1.getLocalDbHost)() : env_1.env.postgres.host;
 const dbPort = env_1.env.ssh.enabled ? (0, tunnel_1.getLocalDbPort)() : env_1.env.postgres.port;
+const endpointId = env_1.env.postgres.host.split(".")[0];
 exports.AppDataSource = new typeorm_1.DataSource({
     type: "postgres",
     host: dbHost,
@@ -51,7 +52,11 @@ exports.AppDataSource = new typeorm_1.DataSource({
     database: env_1.env.postgres.database,
     ssl: {
         rejectUnauthorized: false,
+        servername: env_1.env.postgres.host,
     },
+    extra: env_1.env.postgres.host.includes("neon.tech")
+        ? { options: `endpoint=${endpointId}` }
+        : {},
     synchronize: false,
     logging: env_1.env.nodeEnv === "development",
     entities: Object.values(entities),

@@ -46,6 +46,10 @@ __decorate([
     __metadata("design:type", Boolean)
 ], CRMUser.prototype, "isActive", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ name: "must_change_password", type: "boolean", default: true }),
+    __metadata("design:type", Boolean)
+], CRMUser.prototype, "mustChangePassword", void 0);
+__decorate([
     (0, typeorm_1.CreateDateColumn)(),
     __metadata("design:type", Date)
 ], CRMUser.prototype, "createdAt", void 0);

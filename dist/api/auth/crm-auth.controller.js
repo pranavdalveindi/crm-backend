@@ -3,12 +3,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.logoutCrmUser = exports.getCurrentCrmUser = exports.loginCrmUser = void 0;
+exports.changePasswordCrmUser = exports.logoutCrmUser = exports.getCurrentCrmUser = exports.loginCrmUser = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const env_1 = require("../../config/env");
 const connection_1 = require("../../database/connection");
 const CRMUser_1 = require("../../database/entities/CRMUser");
 const encryption_1 = require("../../utils/encryption");
+const encryption_2 = require("../../utils/encryption");
 const response_1 = require("../../utils/response");
 const crm_auth_middleware_1 = require("./crm-auth.middleware");
 const publicUser = (user) => ({
@@ -17,6 +18,7 @@ const publicUser = (user) => ({
     name: user.name,
     role: user.role,
     isActive: user.isActive,
+    mustChangePassword: user.mustChangePassword,
 });
 const loginCrmUser = async (req, res) => {
     if (!env_1.env.crm.jwtSecret) {
@@ -48,4 +50,27 @@ const logoutCrmUser = (_req, res) => {
     return (0, response_1.sendSuccess)(res, null, "Logged out");
 };
 exports.logoutCrmUser = logoutCrmUser;
+const changePasswordCrmUser = async (req, res) => {
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+    if (newPassword !== confirmPassword) {
+        return (0, response_1.sendError)(res, "New password and confirm password do not match", 400);
+    }
+    if (currentPassword === newPassword) {
+        return (0, response_1.sendError)(res, "New password must be different from current password", 400);
+    }
+    const userRepo = connection_1.AppDataSource.getRepository(CRMUser_1.CRMUser);
+    const user = await userRepo.findOneBy({ id: req.crmUser.id });
+    if (!user || !user.isActive) {
+        return (0, response_1.sendError)(res, "User not found or inactive", 404);
+    }
+    const isPasswordValid = await (0, encryption_1.comparePassword)(currentPassword, user.password);
+    if (!isPasswordValid) {
+        return (0, response_1.sendError)(res, "Incorrect current password", 400);
+    }
+    user.password = await (0, encryption_2.hashPassword)(newPassword);
+    user.mustChangePassword = false;
+    await userRepo.save(user);
+    return (0, response_1.sendSuccess)(res, { user: publicUser(user) }, "Password changed successfully");
+};
+exports.changePasswordCrmUser = changePasswordCrmUser;
 //# sourceMappingURL=crm-auth.controller.js.map

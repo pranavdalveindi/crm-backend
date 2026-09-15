@@ -34,6 +34,9 @@ export class CRMUser {
   @Column({ default: true })
   isActive!: boolean;
 
+  @Column({ name: "must_change_password", type: "boolean", default: true })
+  mustChangePassword!: boolean;
+
   @CreateDateColumn()
   createdAt!: Date;
 

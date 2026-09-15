@@ -17,5 +17,14 @@ router.post("/login", (0, validation_middleware_1.validationMiddleware)({
 }), crm_auth_controller_1.loginCrmUser);
 router.get("/me", crm_auth_middleware_1.protectCrm, crm_auth_controller_1.getCurrentCrmUser);
 router.post("/logout", crm_auth_middleware_1.protectCrm, crm_auth_controller_1.logoutCrmUser);
+router.post("/change-password", crm_auth_middleware_1.protectCrm, (0, validation_middleware_1.validationMiddleware)({
+    body: joi_1.default.object({
+        currentPassword: joi_1.default.string().required(),
+        newPassword: joi_1.default.string().min(6).required(),
+        confirmPassword: joi_1.default.string().required().valid(joi_1.default.ref("newPassword")).messages({
+            "any.only": "Confirm password must match new password",
+        }),
+    }),
+}), crm_auth_controller_1.changePasswordCrmUser);
 exports.default = router;
 //# sourceMappingURL=crm-auth.routes.js.map

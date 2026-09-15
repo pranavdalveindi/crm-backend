@@ -22,7 +22,7 @@ export const env = {
 
   // New: SSH Tunnel Config
   ssh: {
-    enabled: process.env.USE_SSH_TUNNEL === "false",
+    enabled: process.env.USE_SSH_TUNNEL === "true",
     host: process.env.SSH_HOST!,
     port: Number(process.env.SSH_PORT) || 22,
     user: process.env.SSH_USER!,
