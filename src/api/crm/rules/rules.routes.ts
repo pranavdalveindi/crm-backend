@@ -5,6 +5,7 @@ import { protectCrm } from "../../auth/crm-auth.middleware";
 import {
   listRules, getRule, createRule,
   updateRule, deleteRule, toggleRule, previewRule,
+  getRuleSchemasController,
 } from "./rules.controller";
 
 const router = Router();
@@ -32,6 +33,7 @@ const updateRuleSchema = Joi.object({
 });
 
 router.get(  "/",              listRules);
+router.get(  "/schema",        getRuleSchemasController);
 router.get(  "/:id",           getRule);
 router.get(  "/:id/preview",   previewRule);
 router.post( "/",              validationMiddleware({ body: ruleBodySchema }), createRule);

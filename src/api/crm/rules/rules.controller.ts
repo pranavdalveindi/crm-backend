@@ -9,6 +9,12 @@ export const listRules = async (_req: Request, res: Response) => {
   return sendSuccess(res, rules, "Rules fetched");
 };
 
+// ── GET /crm/rules/schema ──────────────────────────────────────────────────────
+export const getRuleSchemasController = async (_req: Request, res: Response) => {
+  const schemas = rulesService.getRuleSchemas();
+  return sendSuccess(res, schemas, "Rule schemas fetched successfully");
+};
+
 // ── GET /crm/rules/:id ────────────────────────────────────────────────────────
 export const getRule = async (req: Request, res: Response) => {
   const rule = await rulesService.getRuleById(req.params.id);

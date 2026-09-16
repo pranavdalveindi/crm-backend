@@ -12,9 +12,9 @@ export const seedAdmin = async () => {
   if (ownsDataSource) await AppDataSource.initialize();
 
   const crmUser = {
-    email: "dev@gmail.com",
+    email: "abhay@inditronics.com",
     password: "Test@1234",
-    name: "Dev Bro",
+    name: "Abhay Wankhede",
     role: CRMUserRole.DEVELOPER,
   };
 
